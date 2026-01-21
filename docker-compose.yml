@@ -1,0 +1,142 @@
+services:
+  # Databases - каждый сервис имеет свою базу данных
+  auth-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: auth_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      - "54321:5432"
+    volumes:
+      - auth_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d auth_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  payment-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: payment_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "54322:5432"
+    volumes:
+      - payment_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d payment_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  financing-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: financing_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "54323:5432"
+    volumes:
+      - financing_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d financing_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  insurance-db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: insurance_db
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    ports:
+      - "54324:5432"
+    volumes:
+      - insurance_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U user -d insurance_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+
+  # Microservices - каждый со своей базой данных
+  auth-service:
+    build: ./auth-service
+    ports:
+      - "8001:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@auth-db:5432/auth_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+      - JWT_SECRET=your-secret-key
+    depends_on:
+      - auth-db
+      - rabbitmq
+
+  api-gateway:
+    build: ./api-gateway-service
+    ports:
+      - "8000:8000"
+    environment:
+      - AUTH_SERVICE_URL=http://auth-service:8000
+      - PAYMENT_SERVICE_URL=http://payment-service:8000
+      - FINANCING_SERVICE_URL=http://financing-service:8000
+      - INSURANCE_SERVICE_URL=http://insurance-service:8000
+    depends_on:
+      - auth-service
+      - payment-service
+      - financing-service
+      - insurance-service
+
+  payment-service:
+    build: ./payment-service
+    ports:
+      - "8002:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@payment-db:5432/payment_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      - payment-db
+      - rabbitmq
+
+  financing-service:
+    build: ./financing-service
+    ports:
+      - "8003:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@financing-db:5432/financing_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      - financing-db
+      - rabbitmq
+
+  insurance-service:
+    build: ./insurance-service
+    ports:
+      - "8004:8000"
+    environment:
+      - DATABASE_URL=postgresql://user:password@insurance-db:5432/insurance_db
+      - RABBITMQ_URL=amqp://guest:guest@rabbitmq:5672/
+    depends_on:
+      - insurance-db
+      - rabbitmq
+
+volumes:
+  auth_db_data:
+  payment_db_data:
+  financing_db_data:
+  insurance_db_data:
